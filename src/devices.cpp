@@ -41,6 +41,7 @@ std::vector<DeviceStatus> PollAllDevices() {
     PollContext ctx;
     ctx.colls = EnumHid();
     auto ignored = IgnoredDevices();
+    ctx.claimed.insert(ignored.begin(), ignored.end());  // also covers drivers that use non-HID interfaces
     if (!ignored.empty())
         ctx.colls.erase(std::remove_if(ctx.colls.begin(), ctx.colls.end(), [&](const HidColl& c) {
                             return std::find(ignored.begin(), ignored.end(), std::make_pair(c.vid, c.pid)) != ignored.end();
@@ -114,6 +115,7 @@ std::vector<DeviceStatus> PollAllDevices() {
     PollGalaxyBuds(ctx);  // before the Bluetooth fallback, which skips devices already listed by name
     PollMoondrop(ctx);
     PollAlienware(ctx);
+    PollMisiomAlpha(ctx);
     PollMaono(ctx);  // MAONO PD200W receiver (352F:040E), experimental battery query
     PollHeadsetControl(ctx);
     PollBluetooth(ctx);   // before the generic HID check: Windows' own level wins for the same device
