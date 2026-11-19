@@ -26,8 +26,7 @@ Battery levels of your wireless mouse, headset, keyboard and controller, right o
 ## Display
 
 **On the taskbar (default):** `🎧 30%  🖱 93%` next to the notification area, drawn with the Windows icon font.
-- **Low battery:** a red number means the battery is below 20%.
-- **Devices shown:** right-click to switch between **Show all devices** and **Show only the lowest battery**. The latter follows the lowest current percentage among visible, connected devices. Sleeping devices, unknown levels and devices that report only levels such as "Low" still appear in the menu.
+- **Low battery:** a red number means 15% or less.
 - **Charging:** a blue ⚡ appears next to the number.
 - **Asleep:** dimmed text means the device is asleep and the last known value is shown.
 - **Two devices of one kind:** with two mice (or two controllers...) both would get the same icon, so each one gets a tiny caption of up to 3 letters in the corner of its icon, taken from its name (`MX`, `PRO`), or a number when the names do not tell them apart. A device that is alone in its kind shows no caption.
@@ -42,7 +41,7 @@ Battery levels of your wireless mouse, headset, keyboard and controller, right o
   comes from the driver that found the device, then the vendor ID, then the name; colors and rules are in
   `src/brands.cpp`. Turn it off with *Brand colors* in the menu.
 
-**Tray icons:** one icon per device or a single icon for the lowest battery, with the number drawn in it. The tray shows a "Low battery" notification at 15%. The app switches to tray icons automatically when the taskbar widget can't be shown.
+**Tray icons:** one icon per device with the number drawn in it, plus a "Low battery" notification at 15%. The app switches to this automatically when the taskbar is vertical or can't be found.
 
 Hover for details. Click for the menu: every device (click one to hide or show it), display mode, *Refresh now*, *Start with Windows*, and *Exit*. Levels refresh every 60 seconds, and right away when a device is plugged in or the PC wakes up.
 
@@ -63,8 +62,6 @@ Hover for details. Click for the menu: every device (click one to hide or show i
 | **Corsair** | Void / Void Pro / Void Elite / HS70 / HS80 wireless; Bragi devices (Virtuoso, Void V2, HS80 MAX, Slipstream mice and keyboards, including the newer Slipstream receiver `1B1C:2B00`, e.g. Scimitar Elite SE Wireless, and Dark Core RGB Pro SE); Sabre V2 Pro Ultralight Wireless (`1B1C:2B2A`) | Vendor HID reports, Bragi `GET` (read-only), Compx 17-byte battery protocol (read-only) |
 | **Cooler Master** | MM712, MM731 (2.4 GHz dongle or USB cable) | Vendor HID status report (read-only) |
 | **HyperX** | Cloud III Wireless, Cloud III S Wireless, Cloud II Wireless (HP, Kingston, DTS), Cloud II Core Wireless, Cloud Alpha Wireless, Cloud Alpha 2 Wireless, Cloud Flight, Cloud Flight S, Cloud Stinger Core Wireless, Cloud Core Wireless DTS, Pulsefire Haste 2 Core Wireless (2.4 GHz dongle), Pulsefire Haste 2 Wireless (2.4 GHz dongle `03F0:0F98`, tested; `0D97` untested) | Vendor HID reports (Haste 2: [protocol notes](docs/hyperx_haste_2.md)) |
-| **Misiom** | Alpha (standard edition), 2.4 GHz receiver (`3206:7003`, experimental) | Read-only battery query through the installed [Misiom Windows audio driver](https://www.misiom.cn/download/). The O HUB app can be closed. |
-| **EWEADN** | X23 Pro with the YDX 2.4 GHz receiver (`04F3:026F`, experimental) | Battery percentage from the vendor HID status report used by the [official web driver](https://hub.eweadn.cn/ydx/web/index.html). |
 | **Glorious** | Model O / O- / D / D- Wireless, Model O 2 / D 2 PRO | Vendor feature report |
 | **Hitscan** | Hyperlight X, Hyperlight N | Vendor feature report (same protocol as Glorious) |
 | **Kysona / Pulsar / ATK (VXE) / Hitscan** | Kysona M600 / Mercury, Pulsar and ATK VXE wireless mice (e.g. VXE X3 Pro, VXE Dragonfly R1 / R1 Pro Max / R1 SE+, ATK F1 Extreme), Hitscan Hyperlight | Shared vendor protocol with checksummed replies |
