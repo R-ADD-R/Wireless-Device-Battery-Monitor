@@ -578,7 +578,10 @@ TrayEntry* LowestBattery(const std::vector<TrayEntry*>& entries) {
     for (auto* entry : entries) {
         const auto& status = entry->st;
         if (!status.connected || status.asleep || status.percent < 0 || status.percent > 100 || !status.levelText.empty()) continue;
-        if (!lowest || status.percent < lowest->st.percent) lowest = entry;
+        // Prefer devices running on battery, then compare percentages within the same group.
+        const auto rank = std::pair{ status.charging || status.full, status.percent };
+        if (!lowest || rank < std::pair{ lowest->st.charging || lowest->st.full, lowest->st.percent })
+            lowest = entry;
     }
     return lowest;
 }
