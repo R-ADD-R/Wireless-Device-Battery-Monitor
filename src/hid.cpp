@@ -170,6 +170,30 @@ bool HidDev::GetInputReport(BYTE reportId, std::vector<BYTE>& out) {
     return HidD_GetInputReport(h_, out.data(), (ULONG)out.size()) != FALSE;
 }
 
+bool HidDev::GetFeatureTimed(BYTE reportId, std::vector<BYTE>& out, DWORD timeoutMs) {
+    if (!ok() || !overlapped_ || !c_.featLen()) return false;
+    out.assign(c_.featLen(), 0);
+    out[0] = reportId;
+    OVERLAPPED ov{};
+    ov.hEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    if (!ov.hEvent) return false;
+    const DWORD length = static_cast<DWORD>(out.size());
+    DWORD received = 0;
+    BOOL done = DeviceIoControl(h_, IOCTL_HID_GET_FEATURE, out.data(), length,
+                                out.data(), length, &received, &ov);
+    if (!done && GetLastError() == ERROR_IO_PENDING) {
+        if (WaitForSingleObject(ov.hEvent, timeoutMs) == WAIT_OBJECT_0) {
+            done = GetOverlappedResult(h_, &ov, &received, FALSE);
+        } else {
+            CancelIoEx(h_, &ov);
+            // Windows HID must release the report buffer before we return, as in Read().
+            GetOverlappedResult(h_, &ov, &received, TRUE);
+        }
+    }
+    CloseHandle(ov.hEvent);
+    return done != FALSE;
+}
+
 bool HidDev::GetFeatureByte(BYTE reportId, BYTE& value) {
     if (!ok() || !overlapped_ || !reportId || c_.featLen() < 2) return false;
     BYTE report[] = {reportId, 0xff};

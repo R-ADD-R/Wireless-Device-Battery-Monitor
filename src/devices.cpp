@@ -136,6 +136,9 @@ std::vector<DeviceStatus> PollAllDevices() {
     PollDarkrim(ctx);
     PollAlienware(ctx);
     PollMaono(ctx);  // MAONO PD200W receiver (352F:040E), experimental battery query
+    // The Alpha audio interface does not appear in the filtered HID collection list.
+    if (std::find(ignored.begin(), ignored.end(), std::pair<USHORT, USHORT>{ 0x3206, 0x7003 }) == ignored.end())
+        PollMisiomAlpha(ctx);
     PollHeadsetControl(ctx);
     PollBluetooth(ctx);   // before the generic HID check: Windows' own level wins for the same device
     PollGenericHid(ctx);
