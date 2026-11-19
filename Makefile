@@ -46,6 +46,8 @@ test: test-update-core test-update-win test-update-signature
 	./build/runtime_estimate_test.exe
 	$(CXX) $(CXXFLAGS) tests/aula_mouse_driver_test.cpp src/drivers/aula_mouse.cpp -o build/aula_mouse_driver_test.exe
 	./build/aula_mouse_driver_test.exe
+	$(CXX) $(CXXFLAGS) tests/eweadn_x23_driver_test.cpp src/drivers/eweadn.cpp -o build/eweadn_x23_driver_test.exe
+	./build/eweadn_x23_driver_test.exe
 	$(CXX) $(CXXFLAGS) tests/darkrim_driver_test.cpp src/drivers/darkrim.cpp -o build/darkrim_driver_test.exe
 	./build/darkrim_driver_test.exe
 	$(CXX) $(CXXFLAGS) tests/nuphy_driver_test.cpp src/drivers/nuphy.cpp -o build/nuphy_driver_test.exe

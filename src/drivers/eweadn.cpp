@@ -11,7 +11,16 @@
 //  * 47 00 (checkWirelessOnline): data[0] = 1 when the mouse is linked to the receiver.
 //  * 4F 81 (getBasics, a read command): data[0] bit 7 = charging, bits 0-6 = battery percent.
 // Only these two read commands are sent; nothing is ever written to the mouse's settings.
+//
+// EWEADN X23 Pro with the YDX 2.4 GHz receiver (04F3:026F).
+// The official web driver (https://hub.eweadn.cn/ydx/web/index.html) reads
+// feature report 05 and gets the battery from input report 04. GamingMS.exe
+// checks the "1010" signature and the link flag in feature report 05.
 #include "drivers.h"
+
+#include <algorithm>
+#include <cwchar>
+#include <map>
 
 namespace {
 constexpr USHORT kVid = 0x372E;
@@ -41,9 +50,105 @@ bool Query(HidDev& d, BYTE cmd, BYTE sub, std::vector<BYTE>& data) {
     }
     return false;
 }
+
+constexpr USHORT kX23Vid = 0x04F3;
+constexpr USHORT kX23Receiver = 0x026F;
+
+struct Receiver {
+    HidDev device;
+    int percent = -1;
+    bool charging = false;
+    bool full = false;
+};
+
+// Keep the input handle open so Windows can queue updates between polls.
+std::map<std::wstring, Receiver> g_receivers;
+
+bool IsStatusCollection(const HidColl& c) {
+    return c.iface == 1 && c.page() == 0xFF00 && c.usage() == 1 && c.inLen() >= 10 && c.featLen() >= 32;
+}
+
+int ReadLink(HidDev& device) {
+    std::vector<BYTE> status;
+    if (!device.GetFeatureTimed(0x05, status, 200) || status.size() < 6 || status[0] != 0x05 ||
+        status[1] != '1' || status[2] != '0' || status[3] != '1' || status[4] != '0' || status[5] > 1)
+        return -1;
+    return status[5];
+}
+
+bool ReadUpdates(Receiver& receiver, ULONGLONG deadline) {
+    bool updated = false;
+    std::vector<BYTE> report;
+    for (int count = 0; count < 64; ++count) {
+        const ULONGLONG now = GetTickCount64();
+        if (now >= deadline) break;
+        const int remaining = static_cast<int>(deadline - now);
+        const int timeout = receiver.percent >= 0 ? std::min(25, remaining) : remaining;
+        if (receiver.device.Read(report, timeout) < 0) break;
+        // The Win32 buffer has the report ID before the WebHID payload.
+        if (report.size() < 10 || report[0] != 0x04 || report[4] > 100 || report[5] > 2) continue;
+        if (report[1] == 0 && report[2] == 0 && report[3] == 0 && report[4] == 0 && report[5] == 0) continue;
+        receiver.full = report[5] == 2;
+        receiver.percent = receiver.full ? 100 : report[4];
+        receiver.charging = report[5] == 1;
+        updated = true;
+    }
+    return updated;
+}
+
+void PollX23Pro(PollContext& ctx) {
+    std::set<std::wstring> present;
+    if (!ctx.IsClaimed(kX23Vid, kX23Receiver)) {
+        for (const HidColl* c : ctx.Find(kX23Vid, kX23Receiver, IsStatusCollection)) {
+            auto it = g_receivers.find(c->path);
+            if (it == g_receivers.end()) {
+                // Other brands share this VID/PID. The official X23 driver identifies this
+                // receiver by the USB product string as well as its numeric IDs.
+                if (_wcsicmp(HidProduct(*c).c_str(), L"X23 Pro Receiver") != 0) continue;
+                it = g_receivers.try_emplace(c->path).first;
+                if (!it->second.device.OpenReadOnly(*c)) {
+                    g_receivers.erase(it);
+                    continue;
+                }
+            }
+            present.insert(c->path);
+            Receiver& receiver = it->second;
+            // Link check and queued battery reads share a one-second budget.
+            const ULONGLONG deadline = GetTickCount64() + 1000;
+            const int link = ReadLink(receiver.device);
+            if (link == 0) {
+                receiver.percent = -1;
+                receiver.device.Flush();
+                ctx.Claim(kX23Vid, kX23Receiver);
+                continue;
+            }
+            const bool updated = ReadUpdates(receiver, deadline);
+            if (link < 0 && !updated) {
+                g_receivers.erase(it);  // reconnect on the next poll if the handle stopped responding
+                continue;
+            }
+            if (receiver.percent < 0) continue;
+
+            DeviceStatus status;
+            status.key = ctx.StableKey(L"eweadn-x23:026f");
+            status.name = L"EWEADN X23 Pro";
+            status.via = L"2.4 GHz receiver";
+            status.kind = DeviceKind::Mouse;
+            status.percent = receiver.percent;
+            status.charging = receiver.charging;
+            status.full = receiver.full;
+            ctx.Add(status, kX23Vid, kX23Receiver);
+        }
+    }
+    for (auto it = g_receivers.begin(); it != g_receivers.end();) {
+        if (present.count(it->first)) ++it;
+        else it = g_receivers.erase(it);
+    }
+}
 }  // namespace
 
 void PollEweadn(PollContext& ctx) {
+    PollX23Pro(ctx);
     for (auto [vid, pid] : ctx.Products(kVid)) {
         if (pid != kReceiver && pid != kS9UltraCable) continue;  // other 372E products (AULA, keyboards) are not this protocol
         const bool cable = pid == kS9UltraCable;
