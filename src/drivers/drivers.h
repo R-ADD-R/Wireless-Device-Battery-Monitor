@@ -120,6 +120,7 @@ void PollGalaxyBuds(PollContext& ctx); // Samsung Galaxy Buds (Bluetooth RFCOMM,
 void PollMoondrop(PollContext& ctx);   // MOONDROP GM01 Pro headset (WalkPlay 2.4 GHz dongle)
 void PollAlienware(PollContext& ctx);  // Alienware AW920H headset on its 2.4 GHz dongle (413C:A515)
 void PollMisiomAlpha(PollContext& ctx);  // Misiom Alpha receiver (3206:7003) with the vendor audio driver
+void PollEweadnX23(PollContext& ctx);  // EWEADN X23 Pro YDX 2.4 GHz receiver (04F3:026F)
 // Fallbacks.
 void PollHeadsetControl(PollContext &ctx); // only if headsetcontrol.exe is installed
 void PollGenericHid(PollContext &ctx);
