@@ -28,7 +28,8 @@ Battery levels of your wireless mouse, headset, keyboard and controller, right o
 ## Display
 
 **On the taskbar (default):** `🎧 30%  🖱 93%` next to the notification area, drawn with the Windows icon font.
-- **Low battery:** a red number means 15% or less.
+- **Low battery:** a red number means the battery is below 20%.
+- **Devices shown:** right-click to switch between **Show all devices** and **Show only the lowest battery**. The latter follows the lowest current percentage among visible, connected devices. Sleeping devices, unknown levels and devices that report only levels such as "Low" still appear in the menu.
 - **Charging:** a blue ⚡ appears next to the number. Once the device is fully charged and still on power, it turns into a green ✓.
 - **Asleep:** dimmed text means the device is asleep and the last known value is shown.
 - **Disconnected (optional):** turn on *Show disconnected devices* to display a dimmed `×` for devices whose driver explicitly reports an offline wireless link. This does not infer disconnection from a missed battery poll; the default remains to hide offline devices.
@@ -44,7 +45,7 @@ Battery levels of your wireless mouse, headset, keyboard and controller, right o
   comes from the driver that found the device, then the vendor ID, then the name; colors and rules are in
   `src/brands.cpp`. Turn it off with *Brand colors* in the menu.
 
-**Tray icons:** one icon per device with the number drawn in it, plus a "Low battery" notification at 15%. The app switches to this automatically when the taskbar is vertical or can't be found.
+**Tray icons:** one icon per device or a single icon for the lowest battery, with the number drawn in it. The tray shows a "Low battery" notification at 15%. The app switches to tray icons automatically when the taskbar widget can't be shown.
 
 **Custom device names:** open the device submenu and select *Rename device...* to set a name
 (up to 64 characters). The name is shown in the taskbar widget's tooltip/caption,
