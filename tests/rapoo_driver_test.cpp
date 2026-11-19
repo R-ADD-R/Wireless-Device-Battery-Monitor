@@ -35,7 +35,7 @@ bool HidDev::Open(const HidColl& c) {
 }
 void HidDev::Close() { h_ = INVALID_HANDLE_VALUE; }
 int HidDev::Read(std::vector<BYTE>& out, int timeoutMs) {
-    assert(timeoutMs > 0 && timeoutMs <= 5000);
+    assert(timeoutMs > 0 && timeoutMs <= (c_.pid == 0x185A ? 4000 : 5000));
     auto& queue = reports[c_.path];
     if (queue.empty()) return -1;
     out = queue.front();
@@ -130,6 +130,20 @@ int main() {
     assert(ctx.out[0].percent == 45 && !ctx.out[0].charging);
     assert(ctx.out[0].via == L"2.4 GHz receiver");
     assert(ctx.IsClaimed(0x24AE, 0x1244));
+
+    // A captured frame from the 185A; a nearby PID and other collections stay unclaimed.
+    ctx = {};
+    auto otherCollection = Collection(0x185A, L"185a-config", 32);
+    otherCollection.caps.Usage = 0x000E;
+    ctx.colls = { Collection(0x185A, L"185a", 7),
+                  Collection(0x185B, L"185b", 7), otherCollection };
+    const std::vector<BYTE> captured185a = { 0xBB, 0xB0, 0x42, 0x80, 0x0C, 0x01, 0x52 };
+    reports = { { L"185a", { captured185a } }, { L"185b", { captured185a } } };
+    opens = 0;
+    PollRapoo(ctx);
+    assert(opens == 1 && ctx.out.size() == 1 && ctx.out[0].key == L"rapoo:185A");
+    assert(ctx.out[0].kind == DeviceKind::Mouse && ctx.out[0].percent == 82 && !ctx.out[0].charging);
+    assert(ctx.IsClaimed(0x24AE, 0x185A) && !ctx.IsClaimed(0x24AE, 0x185B));
 
     // Charging with 7F means unknown percentage, never 127%.
     ctx = {};

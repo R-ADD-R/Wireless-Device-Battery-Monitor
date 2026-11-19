@@ -11,6 +11,8 @@
 //    `BB B0 71 84 03 02 5F` (state 2 = charging, 95%).
 //  * VT3 Pro Max (receiver 24AE:1244, issue #2258): same passive seven-byte BB B0
 //    status reports on FF00:0002. Source: https://github.com/zbndev/rapoo_battery
+//  * Rapoo Gaming Device (24AE:185A): a real device on interface 1 / FF00:0002 pushed
+//    BB B0 42 80 0C 01 52 (82%, on battery) with no request. The USB name omits the retail model.
 // Legacy BB semantics are restricted to known product IDs; other Telink firmware differs.
 //  * VT3 Max Gen 2 receiver 1417 on another firmware revision (issue #1396) exposes a 13-byte
 //    FF00:0002 collection. Rapoo Hub's VT_nrf54L decoder reads report 07 at any length and only
@@ -20,11 +22,14 @@
 #include "rapoo_protocol.h"
 
 #include <algorithm>
+#include <limits>
 #include <map>
 #include <memory>
 #include <set>
 
 namespace {
+
+constexpr USHORT kRapoo185A = 0x185A;
 
 // Selected names from Rapoo's manifests. Support is determined by the collection and valid
 // status frame, so other models on the same protocol work without extending this table.
@@ -56,21 +61,23 @@ const Model* FindModel(USHORT pid) {
 }
 
 // Mice confirmed to send the 7-byte BB B0 status report.
-bool IsLegacyVT3Pro(USHORT pid) {
+bool UsesLegacyStatus(USHORT pid) {
     return pid == 0x1215 || pid == 0x4415 ||  // VT3 Pro
            pid == 0x1233 || pid == 0x4433 ||  // VT1 Pro Max (issue #136 captures)
-           pid == 0x1244;                      // VT3 Pro Max receiver (issue #2258)
+           pid == 0x1244 ||                    // VT3 Pro Max receiver (issue #2258)
+           pid == kRapoo185A;                  // Rapoo Gaming Device
 }
 
 // Keep open handles between polls (like PollXenta) so Windows buffers passive status reports
 // arriving during the 60 s refresh interval instead of missing mice whose push interval is >5 s.
 std::map<std::wstring, std::unique_ptr<HidDev>> g_rapoo;  // by collection path
 
-bool DrainQueued(HidDev& d, Rapoo::Battery& battery, Rapoo::Profile profile) {
+bool DrainQueued(HidDev& d, Rapoo::Battery& battery, Rapoo::Profile profile, ULONGLONG end) {
     bool got = false;
     for (int i = 0; i < 64; i++) {
         std::vector<BYTE> r;
-        if (d.Read(r, 30) < 0) break;
+        const auto now = GetTickCount64();
+        if (now >= end || d.Read(r, static_cast<int>(std::min<ULONGLONG>(30, end - now))) < 0) break;
         if (Rapoo::DecodeBattery(r.data(), r.size(), battery, profile)) got = true;
     }
     return got;
@@ -88,11 +95,13 @@ bool WaitBattery(HidDev& d, Rapoo::Battery& battery, Rapoo::Profile profile, ULO
 
 bool ReadBattery(std::unique_ptr<HidDev>& slot, const HidColl& c, Rapoo::Battery& battery,
                  Rapoo::Profile profile, bool fresh) {
-    if (!fresh && DrainQueued(*slot, battery, profile)) return true;
-    // A passive report can take several seconds (VT1 Pro Max ~4 s; VT9 Gen 2 ~5-10 s on first open),
-    // so wait up to 5 s when no queued packet was buffered yet. One deadline covers unrelated packets.
-    ULONGLONG start = GetTickCount64();
-    ULONGLONG end = start + 5000;
+    // The 185A pushes a status report every few seconds. Give it one four-second budget,
+    // including any time spent draining unrelated queued packets.
+    const auto cap = c.pid == kRapoo185A ? GetTickCount64() + 4000 : std::numeric_limits<ULONGLONG>::max();
+    if (!fresh && DrainQueued(*slot, battery, profile, cap)) return true;
+    // Existing models can need up to five seconds for a fresh report.
+    const ULONGLONG start = GetTickCount64();
+    const ULONGLONG end = std::min(cap, start + 5000);
     if (WaitBattery(*slot, battery, profile, end)) return true;
     // If a persistent handle failed immediately (e.g. receiver reset between polls), reopen once.
     if (!fresh && GetTickCount64() - start < 50) {
@@ -111,7 +120,7 @@ void PollRapoo(PollContext& ctx) {
                  // The other vendor collections are for configuration/firmware, not battery.
                  return c.page() == 0xFF00 && c.usage() == 0x0002 &&
                         (c.inLen() == 16 || c.inLen() == 19 || (c.inLen() == 13 && pid == 0x1417) ||
-                         (c.inLen() == 7 && IsLegacyVT3Pro(pid)));
+                         (c.inLen() == 7 && UsesLegacyStatus(pid)));
              })) {
             present.insert(c->path);
             auto& slot = g_rapoo[c->path];
