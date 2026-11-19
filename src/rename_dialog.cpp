@@ -6,10 +6,15 @@
 #include <vector>
 
 namespace {
-constexpr wchar_t kWindowClass[] = L"WirelessBatteryRenameDialog";
+constexpr wchar_t kWindowClass[] = L"WirelessBatteryTextEditor";
 
 struct EditorState {
+    const wchar_t* title;
+    const wchar_t* label;
+    const wchar_t* invalidMessage;
+    bool (*valid)(const std::wstring&);
     std::wstring initial;
+    bool numeric = false;
     std::wstring result;
     HWND edit = nullptr;
     bool accepted = false;
@@ -37,11 +42,11 @@ LRESULT CALLBACK EditorProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             HINSTANCE inst = GetModuleHandleW(nullptr);
             const int dpi = GetDpiForWindow(hwnd);
             auto scale = [dpi](int v) { return MulDiv(v, dpi, 96); };
-            HWND label = CreateWindowExW(0, L"STATIC", T(L"Device display name:"),
+            HWND label = CreateWindowExW(0, L"STATIC", state->label,
                                          WS_CHILD | WS_VISIBLE, scale(16), scale(18), scale(382), scale(22),
                                          hwnd, nullptr, inst, nullptr);
             state->edit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", state->initial.c_str(),
-                                          WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
+                                          WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | (state->numeric ? ES_NUMBER : 0),
                                           scale(16), scale(45), scale(382), scale(25),
                                           hwnd, (HMENU)(INT_PTR)100, inst, nullptr);
             HWND save = CreateWindowExW(0, L"BUTTON", T(L"Save"),
@@ -66,13 +71,13 @@ LRESULT CALLBACK EditorProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 const int length = GetWindowTextLengthW(state->edit);
                 std::vector<wchar_t> buffer(static_cast<size_t>(length) + 1, 0);
                 GetWindowTextW(state->edit, buffer.data(), (int)buffer.size());
-                std::wstring name = aliases::Trim(buffer.data());
-                if (!aliases::ValidName(name)) {
-                    MessageBoxW(hwnd, T(L"Enter a name (1-64 characters)."), T(L"Rename device"), MB_OK | MB_ICONINFORMATION);
+                std::wstring value = aliases::Trim(buffer.data());
+                if (!state->valid(value)) {
+                    MessageBoxW(hwnd, state->invalidMessage, state->title, MB_OK | MB_ICONINFORMATION);
                     SetFocus(state->edit);
                     return 0;
                 }
-                state->result = std::move(name);
+                state->result = std::move(value);
                 state->accepted = true;
                 DestroyWindow(hwnd);
                 return 0;
@@ -83,9 +88,13 @@ LRESULT CALLBACK EditorProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     }
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
-}  // namespace
+bool ValidBatteryThreshold(const std::wstring& value) {
+    return !value.empty() && value.size() <= 3 &&
+           std::all_of(value.begin(), value.end(), [](wchar_t c) { return c >= L'0' && c <= L'9'; }) &&
+           std::stoi(value) <= 100;
+}
 
-bool PromptDeviceName(HWND owner, const std::wstring& currentName, std::wstring& result) {
+bool PromptEdit(HWND owner, EditorState& state) {
     HINSTANCE inst = GetModuleHandleW(nullptr);
     WNDCLASSEXW wc{ sizeof(wc) };
     wc.hInstance = inst;
@@ -109,10 +118,8 @@ bool PromptDeviceName(HWND owner, const std::wstring& currentName, std::wstring&
     x = std::max(x, static_cast<int>(area.left));
     y = std::max(y, static_cast<int>(area.top));
 
-    EditorState state;
-    state.initial = currentName;
     HWND dialog = CreateWindowExW(WS_EX_DLGMODALFRAME | WS_EX_TOOLWINDOW, kWindowClass,
-                                   T(L"Rename device"), WS_CAPTION | WS_SYSMENU | WS_POPUP,
+                                   state.title, WS_CAPTION | WS_SYSMENU | WS_POPUP,
                                    x, y, width, height, owner, nullptr, inst, &state);
     if (!dialog) return false;
 
@@ -139,6 +146,23 @@ bool PromptDeviceName(HWND owner, const std::wstring& currentName, std::wstring&
     }
     if (IsWindow(dialog)) DestroyWindow(dialog);
     if (ownerEnabled) EnableWindow(owner, TRUE);
-    if (state.accepted) result = std::move(state.result);
     return state.accepted;
+}
+}  // namespace
+
+bool PromptDeviceName(HWND owner, const std::wstring& currentName, std::wstring& result) {
+    EditorState state{ T(L"Rename device"), T(L"Device display name:"), T(L"Enter a name (1-64 characters)."),
+                       aliases::ValidName, currentName };
+    if (!PromptEdit(owner, state)) return false;
+    result = std::move(state.result);
+    return true;
+}
+
+bool PromptBatteryThreshold(HWND owner, int& threshold) {
+    const wchar_t* instruction = T(L"Enter a whole percentage from 0 to 100.");
+    EditorState state{ T(L"Low-battery color threshold"), instruction, instruction,
+                       ValidBatteryThreshold, std::to_wstring(threshold), true };
+    if (!PromptEdit(owner, state)) return false;
+    threshold = std::stoi(state.result);
+    return true;
 }
