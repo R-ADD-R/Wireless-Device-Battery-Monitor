@@ -28,7 +28,7 @@ Battery levels of your wireless mouse, headset, keyboard and controller, right o
 ## Display
 
 **On the taskbar (default):** `🎧 30%  🖱 93%` next to the notification area, drawn with the Windows icon font.
-- **Low battery:** a red number means the battery is below 20%.
+- **Low battery:** a red number means the battery is at 20% or below.
 - **Devices shown:** right-click to switch between **Show all devices** and **Show only the lowest battery**. The latter follows the lowest current percentage among visible, connected devices. Sleeping devices, unknown levels and devices that report only levels such as "Low" still appear in the menu.
 - **Charging:** a blue ⚡ appears next to the number. Once the device is fully charged and still on power, it turns into a green ✓.
 - **Asleep:** dimmed text means the device is asleep and the last known value is shown.

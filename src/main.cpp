@@ -421,11 +421,11 @@ HICON IconFor(int pct, bool charging, bool dim, Accent accent) {
     Rgb fg = Foreground();
     BrandColor bc = AccentColor(accent, g_lightTaskbar);
     Rgb bar = charging        ? Rgb{ 0, 170, 255 }
-            : pct < LOW_BATTERY_DISPLAY ? Rgb{ 232, 32, 48 }
+            : pct <= LOW_BATTERY_DISPLAY ? Rgb{ 232, 32, 48 }
             : pct <= 30       ? Rgb{ 255, 150, 0 }
             : accent != Accent::None ? Rgb{ bc.r, bc.g, bc.b }
                               : Rgb{ 30, 190, 90 };
-    Rgb text = (pct >= 0 && pct < LOW_BATTERY_DISPLAY) ? Rgb{ 240, 50, 60 } : fg;
+    Rgb text = (pct >= 0 && pct <= LOW_BATTERY_DISPLAY) ? Rgb{ 240, 50, 60 } : fg;
     std::wstring t = pct < 0 ? L"?" : std::to_wstring(pct);
     return RenderIcon(t, pct, text, bar, dim);
 }
@@ -633,7 +633,7 @@ void UpdateDisplay() {
         it.charging = !offline && !e->st.asleep && e->st.charging;
         it.full = !offline && (e->st.full || (e->st.charging && it.percent >= 100));
         it.dim = offline || e->st.percent < 0;
-        it.low = !offline && it.percent >= 0 && it.percent < LOW_BATTERY_DISPLAY && e->st.levelText.empty();
+        it.low = !offline && it.percent >= 0 && it.percent <= LOW_BATTERY_DISPLAY && e->st.levelText.empty();
         it.bluetooth = e->st.via == L"Bluetooth";
         it.label = labels[items.size()];
         it.accent = AccentFor(e->st);
