@@ -169,6 +169,14 @@ USB cable =
 UWB base station = 
 Wireless adapter = 
 
+Bluetooth =
+USB dongle =
+Phone Link =
+Switch mode =
+Xbox Wireless =
+Xbox Wireless / Bluetooth =
+demo =
+
 # Updates
 Automatically check for updates = 
 Later = 

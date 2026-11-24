@@ -1,15 +1,19 @@
-# 繁體中文 (zh-TW). First version; native speakers are welcome to improve it. Requested in issue #90.
-# Improvements are welcome: edit this file and send a pull request.
+# BatteryHub 繁體中文
 @code = zh-TW
 @name = 繁體中文
 
+# Menus, status and notifications
 off / not connected = 已關閉 / 未連線
 {percent}% (last known) = {percent}%（上次已知）
 unknown = 未知
 charging = 充電中
+fully charged = 已充飽
 asleep = 休眠中
 No devices with battery info found = 找不到有電池資訊的裝置
 Low battery = 電量低
+Battery alerts = 低電量通知
+Use default (15%) = 使用預設值（15%）
+Disable notifications = 關閉通知
 {name} is at {percent}% = {name} 剩餘 {percent}%
 Point at a device to show, hide or move it = 指向裝置即可顯示、隱藏或移動它
 Show on the taskbar = 在工作列上顯示
@@ -18,7 +22,52 @@ Move left = 左移
 Move up = 上移
 Move right = 右移
 Move down = 下移
+Rename device... = 重新命名裝置…
+Reset to original name = 還原原始名稱
+Device display name: = 裝置顯示名稱
+Rename device = 重新命名裝置
+Save = 儲存
+Cancel = 取消
+Enter a name (1-64 characters). = 請輸入 1 至 64 個字元的名稱。
+Battery history... = 電量歷史…
+Battery history = 電量歷史
+Last 24 hours = 最近 24 小時
+Last 7 days = 最近 7 天
+Last 30 days = 最近 30 天
+Latest = 最新
+Lowest = 最低
+Highest = 最高
+Change = 變化
+Readings = 讀數
+pp = 個百分點
+24h ago = 24 小時前
+{days} days ago = {days} 天前
+Blue: battery level; green: charging = 藍色表示電量，綠色表示充電
+No readings yet. Keep BatteryHub running to collect history. = 目前沒有讀數。讓 BatteryHub 持續執行即可累積記錄。
+No readings in this period = 這段期間沒有讀數
+Now = 現在
+Recorded battery levels only; gaps are not estimated. = 僅顯示已記錄的電量。缺少讀數的時段留空。
+Demo readings (not saved) = 示範讀數（不儲存）
+Estimated time to empty = 預估剩餘續航時間
+~{days} d {hours} h = 約 {days} 天 {hours} 小時
+~{hours} h = 約 {hours} 小時
+Recent discharge: {rate} pp/day · {count} readings = 近期放電速度：每天 {rate} 個百分點 · {count} 筆讀數
+Currently charging = 正在充電
+No remaining-time estimate while charging. = 充電時不估算剩餘續航時間。
+No recent readings = 近期沒有讀數
+Connect the device to resume forecasting. = 連接裝置後繼續估算續航時間。
+Insufficient decline = 電量下降幅度不足
+A measurable discharge trend is required. = 需要可量測的放電趨勢。
+Collecting data = 正在收集資料
+Requires 4 readings, 2 hours and 3 percentage points of decline. = 需要至少 4 筆讀數、持續 2 小時且電量下降 3 個百分點。
+Blue: recorded battery; green: measured increase = 藍色表示已記錄的電量，綠色表示實測電量上升
+Trend estimates are approximate; missing samples are not inferred. = 趨勢估算僅供參考。缺少讀數的時段留空。
+Clear device history = 清除此裝置的電量歷史
+Clear battery history for this device? = 清除這部裝置的電量歷史？
+Could not save history changes. = 無法儲存歷史記錄的變更。
 Hide last known / asleep devices = 隱藏休眠 / 上次已知的裝置
+Show disconnected devices = 顯示已中斷連線的裝置
+Record battery history = 記錄電量歷史
 Show on the taskbar (icon + percentage) = 在工作列上顯示（圖示 + 百分比）
 Show as tray icons = 以系統匣圖示顯示
 Show all devices = 顯示所有裝置
@@ -35,6 +84,9 @@ Brand colors (Razer green, Logitech blue, ...) = 品牌顏色（Razer 綠、Logi
 Automatic (Windows language) = 自動（Windows 語言）
 Add your own language... = 新增你自己的語言...
 Language = 語言
+Check battery every = 電量檢查間隔
+{seconds} s = {seconds} 秒
+{minutes} min = {minutes} 分鐘
 Refresh now = 立即重新整理
 Start with Windows = 開機時啟動
 Request support for a device... = 請求支援某個裝置...
@@ -72,21 +124,29 @@ Collecting the full report (this takes about 10 seconds)... = 正在收集完整
 request support for a device = 請求支援某個裝置
 Other monitor = 其他螢幕
 Display {number} = 螢幕 {number}
+
+# Where another monitor sits, next to the main one ("Display 3 (left)")
 left = 左側
 right = 右側
 above = 上方
 below = 下方
+
+# Coarse battery levels (devices that only report a few steps)
 Full = 滿
 Good = 良好
 Medium = 中等
 Low = 低
 Critical = 嚴重不足
 Empty = 空
+
+# Device types (request window)
 mouse = 滑鼠
 keyboard = 鍵盤
 headset = 耳機
 controller = 手把
 other = 其他
+
+# How a device is connected
 2.4 GHz dongle = 2.4 GHz 接收器
 2.4 GHz dongle or USB = 2.4 GHz 接收器或 USB
 2.4 GHz receiver = 2.4 GHz 接收器
@@ -103,3 +163,59 @@ USB base station = USB 底座
 USB cable = USB 線
 UWB base station = UWB 底座
 Wireless adapter = 無線轉接器
+
+Bluetooth = 藍牙
+USB dongle = USB 接收器
+Phone Link = 手機連結
+Switch mode = Switch 模式
+Xbox Wireless = Xbox 無線連線
+Xbox Wireless / Bluetooth = Xbox 無線連線 / 藍牙
+demo = 示範
+
+# Updates
+Automatically check for updates = 自動檢查更新
+Later = 稍後
+A new version is available = 有新版本可用
+Available version: {version} = 可用版本為 {version}
+Cancelling download... = 正在取消下載…
+Check for updates... = 檢查更新…
+Checking for updates... = 正在檢查更新…
+Could not check for updates. Check your Internet connection and try again. = 無法檢查更新。請檢查網路連線後再試。
+Could not configure the Windows network connection. = 無法設定 Windows 網路連線。
+Could not create a temporary download folder. = 無法建立暫存下載資料夾。
+Could not download the update's signature. Please try again later. = 無法下載更新簽章。請稍後再試。
+Could not initialize the Windows network connection. = 無法初始化 Windows 網路連線。
+Could not monitor the update installer. = 無法監控更新安裝程式。
+Could not prepare the update helper. Your current version was kept. = 無法準備更新輔助程式。已保留目前版本。
+Could not start the update helper. Your current version was kept. = 無法啟動更新輔助程式。已保留目前版本。
+Download and install = 下載並安裝
+Downloading and verifying the update = 正在下載並驗證更新
+GitHub could not provide update information. Please try again later. = GitHub 未能提供更新資訊。請稍後再試。
+GitHub returned invalid update information. Please try again later. = GitHub 傳回的更新資訊無效。請稍後再試。
+GitHub temporarily limited update checks. Please try again later. = GitHub 暫時限制了更新檢查。請稍後再試。
+Installed version: {version} = 已安裝版本為 {version}
+Installing update... = 正在安裝更新…
+Please wait before checking again. GitHub may temporarily limit update checks. = 請稍後再檢查。GitHub 可能暫時限制更新檢查。
+Please wait before contacting GitHub again. = 請稍後再連線至 GitHub。
+Release notes = 版本說明
+Setup finished, but the new version could not be confirmed. Please check the installed version. = 安裝已結束，但無法確認新版本。請檢查已安裝的版本。
+The previous instance is still running. Close and reopen BatteryHub to use the update. = 舊程序仍在執行。請關閉並重新開啟 BatteryHub 以使用更新。
+The update could not be downloaded or its integrity could not be verified. Your current version was kept. = 無法下載更新或驗證其完整性。已保留目前版本。
+The update did not finish. You may need to rerun the installer from the official release page. = 更新未完成。可能需要從官方發佈頁面重新執行安裝程式。
+The update installer failed verification. Your current version was kept. = 更新安裝程式未通過驗證。已保留目前版本。
+The update or installation could not be verified. Please use the official release page. = 無法驗證更新或安裝。請使用官方發佈頁面。
+The update was cancelled or could not start. Your current version was kept. = 更新已取消或無法啟動。已保留目前版本。
+The update's signature is not valid, so it was not downloaded. Your current version was kept. = 更新簽章無效，已停止下載並保留目前版本。
+This is a development build. Automatic release updates are disabled to preserve local changes. = 這是開發版本。為保留本機變更，已關閉自動更新。
+This is a portable or unregistered copy. Download the portable ZIP from the release page. = 這是可攜版或未註冊的副本。請從發佈頁面下載可攜版 ZIP。
+This release has no signed Windows installer yet. Please use Release notes to download it manually. = 此版本尚未提供已簽署的 Windows 安裝程式。請開啟版本說明手動下載。
+This update is no longer available. Check for updates again. = 此更新已下架。請重新檢查更新。
+Update available: {version}... = 可更新至 {version}…
+Update check cancelled or timed out. = 更新檢查已取消或逾時。
+Update check failed - try again... = 檢查更新失敗，請再試一次…
+Update download cancelled. = 更新下載已取消。
+Windows needs to restart before this update is complete. Your computer will not restart automatically. = 重新啟動 Windows 後才能完成更新。電腦會等待你手動重新啟動。
+BatteryHub could not reopen. Please start it manually or repair the installation. = 無法重新開啟 BatteryHub。請手動啟動或修復安裝。
+BatteryHub is up to date. = BatteryHub 已是最新版本。
+BatteryHub update = 更新 BatteryHub
+BatteryHub will close briefly while the update is installed. = 安裝更新時，BatteryHub 會暫時關閉。
