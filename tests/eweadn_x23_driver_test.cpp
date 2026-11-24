@@ -1,6 +1,8 @@
 #include "../src/drivers/drivers.h"
 
+#include <algorithm>
 #include <cassert>
+#include <iterator>
 #include <deque>
 #include <map>
 
@@ -49,12 +51,14 @@ void HidDev::Close() { h_ = INVALID_HANDLE_VALUE; }
 
 bool HidDev::GetFeatureTimed(BYTE id, std::vector<BYTE>& out, DWORD timeout) {
     assert(id == 0x05 && timeout == 200);
+    assert(c_.featLen() == 32);
     out = receivers.at(c_.path).link;
     return !out.empty();
 }
 
 int HidDev::Read(std::vector<BYTE>& out, int timeout) {
     assert(timeout > 0 && timeout <= 1000);
+    assert(c_.inLen() != 0);
     auto& input = receivers.at(c_.path).input;
     if (input.empty()) return -1;
     out = std::move(input.front());
@@ -116,4 +120,37 @@ int main() {
     receivers[target.path].input = { BatteryReport(20) };
     result = poll();
     assert(result.size() == 1 && result[0].key == key && result[0].percent == 20);
+
+    auto splitInput = Collection(LR"(\\?\hid#vid_04f3&pid_026f&mi_01&col03#b&receiver1&0&0002#{hid})");
+    splitInput.caps.UsagePage = 0x000A;
+    splitInput.caps.Usage = 0;
+    splitInput.caps.FeatureReportByteLength = 0;
+    auto splitControl = splitInput;
+    splitControl.path = LR"(\\?\hid#vid_04f3&pid_026f&mi_01&col04#b&receiver1&0&0003#{hid})";
+    splitControl.caps.InputReportByteLength = 0;
+    splitControl.caps.FeatureReportByteLength = 32;
+    auto otherControl = splitControl;
+    otherControl.path = LR"(\\?\hid#vid_04f3&pid_026f&mi_01&col04#b&receiver2&0&0003#{hid})";
+
+    auto splitPoll = [&](std::vector<HidColl> colls) {
+        PollContext ctx;
+        ctx.colls = std::move(colls);
+        PollEweadn(ctx);
+        return ctx.out;
+    };
+    assert(splitPoll({ splitInput, otherControl }).empty());
+    receivers[splitInput.path] = {};
+    receivers[splitControl.path] = {};
+    assert(splitPoll({ otherControl, splitInput, splitControl }).empty());  // keep handles open for the next poll
+    std::vector<BYTE> captured(32, 0);
+    const BYTE prefix[] = { 0x04, 0x01, 0x01, 0x02, 0x50, 0x00, 0x02, 0x00, 0x01, 0x11 };
+    std::copy(std::begin(prefix), std::end(prefix), captured.begin());
+    receivers.at(splitInput.path).input.push_back(captured);
+    result = splitPoll({ otherControl, splitInput, splitControl });
+    assert(result.size() == 1 && result[0].percent == 80 && result[0].key == key);
+    assert(receivers.at(splitInput.path).opens == 1 && receivers.at(splitControl.path).opens == 1);
+    assert(receivers.find(otherControl.path) == receivers.end());
+    receivers.at(splitControl.path).link[5] = 0;
+    assert(splitPoll({ splitInput, splitControl }).empty());
+
 }

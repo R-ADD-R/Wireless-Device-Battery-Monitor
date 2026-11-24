@@ -25,7 +25,9 @@ static BYTE responseId = 0x87, responsePercent = 56;
 static unsigned opens = 0, queries = 0, cancels = 0, closes = 0;
 
 CONFIGRET MockListSize(ULONG* size, GUID* kind, const wchar_t*, ULONG) {
-    *size = !present ? 1 : kind->Data1 == 0x50894fa4 ? ARRAYSIZE(kPresent) : legacy ? ARRAYSIZE(kLegacy) : 1;
+    if (!present) *size = 1;
+    else if (kind->Data1 == 0x50894fa4) *size = legacy ? 1 : ARRAYSIZE(kPresent);
+    else *size = legacy ? ARRAYSIZE(kLegacy) : 1;
     return CR_SUCCESS;
 }
 CONFIGRET MockList(GUID* kind, const wchar_t*, wchar_t* list, ULONG size, ULONG) {
@@ -127,4 +129,14 @@ int main() {
     responsePercent = 80;
     PollMisiomAlpha(delayed);
     assert(delayed.out.size() == 1 && delayed.out[0].percent == 80 && closes == 2 * opens);
+    pending = false;
+    present = false;
+    assert(DumpMisiomAlpha().find(L"No present vendor audio control interface matched") != std::wstring::npos);
+    present = true;
+    legacy = true;
+    responseId = 0;
+    responsePercent = 0;
+    const auto diagnostic = DumpMisiomAlpha();
+    assert(diagnostic.find(L"\\xmosctl: Battery query completed, bytes returned: 0") != std::wstring::npos);
+    assert(diagnostic.find(L"reply prefix: 00 00, no usable reading") != std::wstring::npos);
 }

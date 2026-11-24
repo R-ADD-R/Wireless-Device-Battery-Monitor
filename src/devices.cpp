@@ -157,5 +157,9 @@ std::wstring DumpHidCollections() {
     out += report::DumpExtras();  // unopenable HID collections, non-HID USB devices, Bluetooth devices
     out += DumpXentaFrames();
     out += DumpAstroFrames();
+    const auto ignored = IgnoredDevices();
+    if (std::find(ignored.begin(), ignored.end(), std::make_pair<USHORT, USHORT>(0x3206, 0x7003)) == ignored.end() &&
+        out.find(L"\n3206:7003 ") != std::wstring::npos)
+        out += DumpMisiomAlpha();
     return out;
 }

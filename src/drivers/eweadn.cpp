@@ -16,10 +16,14 @@
 // The official web driver (https://hub.eweadn.cn/ydx/web/index.html) reads
 // feature report 05 and gets the battery from input report 04. GamingMS.exe
 // checks the "1010" signature and the link flag in feature report 05.
+// A capture from receiver firmware REV_0301 showed two 000A:0000 collections on MI_01:
+// 32 bytes of input on one and 32 bytes of feature data on the other. It reported 80%,
+// matching EWEADN E-HUB 3.3.5. Keep the input handle open between polls (reports every ~4.9 s).
 #include "drivers.h"
 
 #include <algorithm>
 #include <cwchar>
+#include <cwctype>
 #include <map>
 
 namespace {
@@ -55,7 +59,8 @@ constexpr USHORT kX23Vid = 0x04F3;
 constexpr USHORT kX23Receiver = 0x026F;
 
 struct Receiver {
-    HidDev device;
+    HidDev input;
+    HidDev control;  // opened only when the feature report is on a separate collection
     int percent = -1;
     bool charging = false;
     bool full = false;
@@ -64,8 +69,38 @@ struct Receiver {
 // Keep the input handle open so Windows can queue updates between polls.
 std::map<std::wstring, Receiver> g_receivers;
 
-bool IsStatusCollection(const HidColl& c) {
-    return c.iface == 1 && c.page() == 0xFF00 && c.usage() == 1 && c.inLen() >= 10 && c.featLen() >= 32;
+bool IsSplitCollection(const HidColl& c) {
+    return c.iface == 1 && c.page() == 0x000A && c.usage() == 0 && c.outLen() == 0;
+}
+
+bool IsBatteryCollection(const HidColl& c) {
+    return (c.iface == 1 && c.page() == 0xFF00 && c.usage() == 1 && c.inLen() >= 10 && c.featLen() >= 32) ||
+           (IsSplitCollection(c) && c.inLen() == 32 && c.featLen() == 0);
+}
+
+// Sibling Windows HID paths share the interface and instance prefix. The collection index
+// appears as &colNN in the hardware part and as the final &NNNN in the instance part.
+std::wstring InterfaceKey(std::wstring path) {
+    for (auto& ch : path) ch = static_cast<wchar_t>(towlower(ch));
+    const auto collection = path.find(L"&col");
+    if (collection == std::wstring::npos || path.find(L'#', collection) != collection + 6) return {};
+    const auto instance = collection + 7;
+    const auto end = path.find(L'#', instance);
+    if (end == std::wstring::npos || end < instance + 5 || path[end - 5] != L'&') return {};
+    return path.substr(0, collection) + L"#" + path.substr(instance, end - 5 - instance);
+}
+
+const HidColl* FindControlCollection(const HidColl& input, const std::vector<const HidColl*>& controls) {
+    if (input.featLen()) return &input;
+    const auto key = InterfaceKey(input.path);
+    if (key.empty()) return nullptr;
+    const HidColl* match = nullptr;
+    for (const auto* control : controls) {
+        if (InterfaceKey(control->path) != key) continue;
+        if (match) return nullptr;  // ambiguous: do not pair with an arbitrary collection
+        match = control;
+    }
+    return match;
 }
 
 int ReadLink(HidDev& device) {
@@ -84,7 +119,7 @@ bool ReadUpdates(Receiver& receiver, ULONGLONG deadline) {
         if (now >= deadline) break;
         const int remaining = static_cast<int>(deadline - now);
         const int timeout = receiver.percent >= 0 ? std::min(25, remaining) : remaining;
-        if (receiver.device.Read(report, timeout) < 0) break;
+        if (receiver.input.Read(report, timeout) < 0) break;
         // The Win32 buffer has the report ID before the WebHID payload.
         if (report.size() < 10 || report[0] != 0x04 || report[4] > 100 || report[5] > 2) continue;
         if (report[1] == 0 && report[2] == 0 && report[3] == 0 && report[4] == 0 && report[5] == 0) continue;
@@ -99,14 +134,25 @@ bool ReadUpdates(Receiver& receiver, ULONGLONG deadline) {
 void PollX23Pro(PollContext& ctx) {
     std::set<std::wstring> present;
     if (!ctx.IsClaimed(kX23Vid, kX23Receiver)) {
-        for (const HidColl* c : ctx.Find(kX23Vid, kX23Receiver, IsStatusCollection)) {
+        const auto controls = ctx.Find(kX23Vid, kX23Receiver, [](const HidColl& c) {
+            return IsSplitCollection(c) && c.inLen() == 0 && c.featLen() == 32;
+        });
+        for (const HidColl* c : ctx.Find(kX23Vid, kX23Receiver, IsBatteryCollection)) {
+            const HidColl* control = FindControlCollection(*c, controls);
+            if (!control) continue;
             auto it = g_receivers.find(c->path);
+            if (it != g_receivers.end() && control != c && it->second.control.coll().path != control->path) {
+                g_receivers.erase(it);
+                it = g_receivers.end();
+            }
             if (it == g_receivers.end()) {
                 // Other brands share this VID/PID. The official X23 driver identifies this
                 // receiver by the USB product string as well as its numeric IDs.
                 if (_wcsicmp(HidProduct(*c).c_str(), L"X23 Pro Receiver") != 0) continue;
+                if (control != c && _wcsicmp(HidProduct(*control).c_str(), L"X23 Pro Receiver") != 0) continue;
                 it = g_receivers.try_emplace(c->path).first;
-                if (!it->second.device.OpenReadOnly(*c)) {
+                if (!it->second.input.OpenReadOnly(*c) ||
+                    (control != c && !it->second.control.OpenReadOnly(*control))) {
                     g_receivers.erase(it);
                     continue;
                 }
@@ -115,10 +161,10 @@ void PollX23Pro(PollContext& ctx) {
             Receiver& receiver = it->second;
             // Link check and queued battery reads share a one-second budget.
             const ULONGLONG deadline = GetTickCount64() + 1000;
-            const int link = ReadLink(receiver.device);
+            const int link = ReadLink(control == c ? receiver.input : receiver.control);
             if (link == 0) {
                 receiver.percent = -1;
-                receiver.device.Flush();
+                receiver.input.Flush();
                 ctx.Claim(kX23Vid, kX23Receiver);
                 continue;
             }

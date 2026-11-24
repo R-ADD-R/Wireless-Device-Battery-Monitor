@@ -161,4 +161,5 @@ void PollGenericHid(PollContext &ctx);
 void PollBluetooth(PollContext &ctx);
 void PollXInput(PollContext &ctx);
 void PollMisiomAlpha(PollContext& ctx);  // Misiom Alpha 2.4 GHz receiver (3206:7003) via its Windows audio driver
+std::wstring DumpMisiomAlpha();
 void PollMaono(PollContext &ctx);
