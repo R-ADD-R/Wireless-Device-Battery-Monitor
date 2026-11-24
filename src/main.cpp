@@ -39,14 +39,13 @@ constexpr UINT_PTR TIMER_ALERT_ICON = 3;
 // "Check battery every" choices in seconds; 60 is the default. A poll resets an awake device's sleep timer,
 // so a device only sleeps if its timer is shorter than the interval.
 constexpr DWORD POLL_SECONDS[] = { 30, 60, 120, 300, 600, 900, 1800, 3600 };
-constexpr int DEFAULT_LOW_BATTERY_THRESHOLD = 15;
+constexpr int LOW_BATTERY = 15;
 constexpr UINT PLACEHOLDER_ID = 1;
 constexpr UINT ALERT_ICON_ID = 2;
 
 enum MenuId : UINT {
     ID_REFRESH = 100, ID_AUTOSTART, ID_HIDE_LAST_KNOWN, ID_WIDGET_BACKGROUND, ID_EXIT, ID_MODE_WIDGET, ID_MODE_TRAY, ID_SUPPORT, ID_REPORT,
     ID_BRAND_COLORS, ID_STACKED, ID_SHOW_DISCONNECTED, ID_RECORD_HISTORY,
-    ID_COLOR_THRESHOLD_DEFAULT = 202, ID_COLOR_THRESHOLD_CUSTOM,
     ID_POLL_FIRST = 500,  // "Check battery every": ID_POLL_FIRST + 0..7
     ID_UPDATE = 200, ID_AUTO_UPDATE,
     ID_LANG_AUTO = 400, ID_LANG_ADD, ID_LANG_FIRST,  // "Language": ID_LANG_FIRST + 0..63
@@ -63,7 +62,6 @@ const wchar_t* kRunKey = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 const wchar_t* kRunValue = L"WirelessBattery";
 
 const wchar_t* kSettingsKey = L"Software\\WirelessBattery";
-constexpr wchar_t kLowBatteryThresholdValue[] = L"LowBatteryColorThreshold";
 
 HINSTANCE g_inst;
 HWND g_hwnd;
@@ -75,7 +73,6 @@ bool g_useWidget = false;      // what is actually shown right now
 bool g_hideLastKnown = false;  // hide (last known) / asleep devices from taskbar and tray
 bool g_showDisconnectedDevices = false;  // opt-in, explicit driver-reported offline devices only
 bool g_recordHistory = true;  // save readings for "Battery history..." (menu option, on by default)
-int g_lowBatteryThreshold = DEFAULT_LOW_BATTERY_THRESHOLD;
 std::wstring g_widgetMonitor = L"all";  // which taskbars show the widget: "all", "main" or one monitor id
 bool g_widgetBackground = false;  // draw a plate behind the taskbar text (transparent taskbar themes)
 bool g_stacked = false;      // icon above the percentage (menu option)
@@ -215,14 +212,6 @@ bool LoadBoolSetting(const wchar_t* name, bool defaultVal) {
 void SaveBoolSetting(const wchar_t* name, bool on) {
     DWORD v = on ? 1 : 0;
     RegSetKeyValueW(HKEY_CURRENT_USER, kSettingsKey, name, REG_DWORD, &v, sizeof(v));
-}
-
-int LoadLowBatteryThreshold() {
-    DWORD value = 0, size = sizeof(value);
-    if (RegGetValueW(HKEY_CURRENT_USER, kSettingsKey, kLowBatteryThresholdValue, RRF_RT_REG_DWORD,
-                     nullptr, &value, &size) == ERROR_SUCCESS && value <= 100)
-        return static_cast<int>(value);
-    return DEFAULT_LOW_BATTERY_THRESHOLD;
 }
 
 // A REG_MULTI_SZ with one "device-key<TAB>threshold" entry per override.
@@ -425,20 +414,15 @@ Rgb Foreground() { return g_lightTaskbar ? Rgb{ 0, 0, 0 } : Rgb{ 255, 255, 255 }
 
 Accent AccentFor(const DeviceStatus& s) { return g_brandColors ? BrandOf(s) : Accent::None; }
 
-bool IsLowBattery(int percent, bool onPower) {
-    return !onPower && percent >= 0 && percent <= g_lowBatteryThreshold;
-}
-
-HICON IconFor(int pct, bool charging, bool full, bool dim, Accent accent) {
+HICON IconFor(int pct, bool charging, bool dim, Accent accent) {
     Rgb fg = Foreground();
     BrandColor bc = AccentColor(accent, g_lightTaskbar);
-    const bool low = IsLowBattery(pct, charging || full);
     Rgb bar = charging        ? Rgb{ 0, 170, 255 }
-            : low             ? Rgb{ 232, 32, 48 }
+            : pct <= LOW_BATTERY ? Rgb{ 232, 32, 48 }
             : pct <= 30       ? Rgb{ 255, 150, 0 }
             : accent != Accent::None ? Rgb{ bc.r, bc.g, bc.b }
                               : Rgb{ 30, 190, 90 };
-    Rgb text = low ? Rgb{ 240, 50, 60 } : fg;
+    Rgb text = (!charging && pct >= 0 && pct <= LOW_BATTERY) ? Rgb{ 240, 50, 60 } : fg;
     std::wstring t = pct < 0 ? L"?" : std::to_wstring(pct);
     return RenderIcon(t, pct, text, bar, dim);
 }
@@ -538,16 +522,14 @@ void ApplyEntry(TrayEntry& e) {
     // Never display an old percentage as a live reading for an explicitly offline device.
     int shown = !s.connected ? -1 : (s.percent >= 0 ? s.percent : e.lastPct);
     bool dim = !s.connected || s.percent < 0;
-    // A device that is fully charged on power gets the normal bar instead of the blue charging one.
-    const bool full = s.connected && !s.asleep && (s.full || (s.charging && shown >= 100));
-    const bool charging = s.connected && !s.asleep && s.charging && !full;
+    // Fully charged on power: the normal green bar instead of the blue charging one.
+    bool charging = s.connected && !s.asleep && s.charging && !s.full && shown < 100;
     Accent accent = AccentFor(s);
-    std::wstring sig = std::to_wstring(shown) + (charging ? L"c" : L"") + (full ? L"f" : L"") +
-                       (dim ? L"d" : L"") + (g_lightTaskbar ? L"l" : L"k") +
+    std::wstring sig = std::to_wstring(shown) + (charging ? L"c" : L"") + (dim ? L"d" : L"") + (g_lightTaskbar ? L"l" : L"k") +
                        L"a" + std::to_wstring((int)accent) + (s.connected ? L"|on" : L"|off");
     if (sig != e.iconSig || !e.icon) {
         if (e.icon) DestroyIcon(e.icon);
-        e.icon = s.connected ? IconFor(shown, charging, full, dim, accent)
+        e.icon = s.connected ? IconFor(shown, charging, dim, accent)
                              : RenderIcon(L"\u00D7", -1, Foreground(), Foreground(), true);
         e.iconSig = sig;
     }
@@ -610,7 +592,7 @@ void UpdateWidget() {
         it.charging = !offline && !e->st.asleep && e->st.charging;
         it.full = !offline && (e->st.full || (e->st.charging && it.percent >= 100));
         it.dim = offline || e->st.percent < 0;
-        it.low = !offline && IsLowBattery(it.percent, it.charging || it.full);
+        it.low = !offline && !it.charging && it.percent >= 0 && it.percent <= LOW_BATTERY;
         it.bluetooth = e->st.via == L"Bluetooth";
         it.label = labels[items.size()];
         it.accent = AccentFor(e->st);
@@ -756,15 +738,6 @@ void SetBrandColors(bool on) {
     UpdateWidget();
 }
 
-void SetLowBatteryThreshold(int threshold) {
-    if (threshold == g_lowBatteryThreshold) return;
-    g_lowBatteryThreshold = threshold;
-    const DWORD value = static_cast<DWORD>(threshold);
-    RegSetKeyValueW(HKEY_CURRENT_USER, kSettingsKey, kLowBatteryThresholdValue, REG_DWORD, &value, sizeof(value));
-    RedrawAll();
-    UpdateWidget();
-}
-
 void SetPollSeconds(DWORD seconds) {
     g_pollIntervalMs = seconds * 1000;
     SavePollSeconds(seconds);
@@ -875,16 +848,6 @@ void ShowMenu() {
         AppendMenuW(m, MF_POPUP | (IsHidden(k) ? 0 : MF_CHECKED), (UINT_PTR)sub, line.c_str());
         keys.push_back(k);
     }
-    HMENU thresholdMenu = CreatePopupMenu();
-    const std::wstring defaultThreshold = TF(L"Use default ({percent}%)",
-        { { L"percent", std::to_wstring(DEFAULT_LOW_BATTERY_THRESHOLD) } });
-    const std::wstring colorThreshold = TF(L"Low-battery color threshold ({percent}%)",
-        { { L"percent", std::to_wstring(g_lowBatteryThreshold) } });
-    AppendMenuW(thresholdMenu, MF_STRING | (g_lowBatteryThreshold == DEFAULT_LOW_BATTERY_THRESHOLD ? MF_CHECKED : 0),
-                ID_COLOR_THRESHOLD_DEFAULT, defaultThreshold.c_str());
-    AppendMenuW(thresholdMenu, MF_STRING, ID_COLOR_THRESHOLD_CUSTOM, T(L"Custom threshold..."));
-    AppendMenuW(m, MF_POPUP, (UINT_PTR)thresholdMenu, colorThreshold.c_str());
-
     AppendMenuW(m, MF_STRING | (g_hideLastKnown ? MF_CHECKED : 0), ID_HIDE_LAST_KNOWN, T(L"Hide last known / asleep devices"));
     AppendMenuW(m, MF_STRING | (g_showDisconnectedDevices ? MF_CHECKED : 0), ID_SHOW_DISCONNECTED, T(L"Show disconnected devices"));
     AppendMenuW(m, MF_STRING | (g_recordHistory ? MF_CHECKED : 0), ID_RECORD_HISTORY, T(L"Record battery history"));
@@ -969,12 +932,6 @@ void ShowMenu() {
     PostMessageW(g_hwnd, WM_NULL, 0, 0);
     DestroyMenu(m);
     switch (cmd) {
-        case ID_COLOR_THRESHOLD_DEFAULT: SetLowBatteryThreshold(DEFAULT_LOW_BATTERY_THRESHOLD); break;
-        case ID_COLOR_THRESHOLD_CUSTOM: {
-            int threshold = g_lowBatteryThreshold;
-            if (PromptBatteryThreshold(g_hwnd, threshold)) SetLowBatteryThreshold(threshold);
-            break;
-        }
         case ID_REFRESH: SetEvent(g_refreshEvt); break;
         case ID_AUTOSTART: SetAutostart(!AutostartEnabled()); break;
         case ID_HIDE_LAST_KNOWN: SetHideLastKnown(!g_hideLastKnown); break;
@@ -1322,7 +1279,6 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int) {
     LoadOrder();
     LoadAliases();
     LoadAlertThresholds();
-    g_lowBatteryThreshold = LoadLowBatteryThreshold();
     battery_history::Initialize(g_demo);
     Reconcile();
     UpdatePlaceholder();  // something to click on until the first poll finishes
